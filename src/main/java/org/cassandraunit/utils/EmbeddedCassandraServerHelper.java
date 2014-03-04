@@ -1,5 +1,6 @@
 package org.cassandraunit.utils;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import me.prettyprint.cassandra.service.CassandraHostConfigurator;
 import me.prettyprint.hector.api.Cluster;
 import me.prettyprint.hector.api.ddl.KeyspaceDefinition;
@@ -14,13 +15,15 @@ import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * @author Jeremy Sevellec
@@ -60,7 +63,18 @@ public class EmbeddedCassandraServerHelper {
         rmdir(tmpDir);
         copy(yamlFile, tmpDir);
         File file = new File(tmpDir + yamlFile);
-        startEmbeddedCassandra(file, tmpDir);
+        cleanStartEmbeddedCassandra(file, tmpDir);
+    }
+
+    public static void startEmbeddedCassandra(File file, String tmpDir) throws TTransportException, IOException, ConfigurationException {
+
+        if (cassandraDaemon != null) {
+            return;
+        }
+
+        checkConfigNameForRestart(file.getAbsolutePath());
+        setupStartCassandraProperties(file, tmpDir);
+        startCassandra();
     }
 
     /**
@@ -70,27 +84,19 @@ public class EmbeddedCassandraServerHelper {
      * @throws IOException
      * @throws InterruptedException
      */
-    public static void startEmbeddedCassandra(File file, String tmpDir) throws TTransportException, IOException, ConfigurationException {
+    public static void cleanStartEmbeddedCassandra(File file, String tmpDir) throws TTransportException, IOException, ConfigurationException {
         if (cassandraDaemon != null) {
             /* nothing to do Cassandra is already started */
             return;
         }
 
         checkConfigNameForRestart(file.getAbsolutePath());
-
-        log.debug("Starting cassandra...");
-        log.debug("Initialization needed");
-
-        System.setProperty("cassandra.config", "file:" + file.getAbsolutePath());
-        System.setProperty("cassandra-foreground", "true");
-
-        // If there is no log4j config set already, set the default config
-        if (System.getProperty("log4j.configuration") == null) {
-            copy(DEFAULT_LOG4J_CONFIG_FILE, tmpDir);
-            System.setProperty("log4j.configuration", "file:" + tmpDir + DEFAULT_LOG4J_CONFIG_FILE);
-        }
-
+        setupStartCassandraProperties(file, tmpDir);
         cleanupAndLeaveDirs();
+        startCassandra();
+    }
+
+    private static void startCassandra() {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         executor = Executors.newSingleThreadExecutor();
         executor.execute(new Runnable() {
@@ -106,6 +112,20 @@ public class EmbeddedCassandraServerHelper {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Cassandra daemon to start:", e);
             throw new AssertionError(e);
+        }
+    }
+
+    private static void setupStartCassandraProperties(File file, String tmpDir) throws IOException {
+        log.debug("Starting cassandra...");
+        log.debug("Initialization needed");
+
+        System.setProperty("cassandra.config", "file:" + file.getAbsolutePath());
+        System.setProperty("cassandra-foreground", "true");
+
+        // If there is no log4j config set already, set the default config
+        if (System.getProperty("log4j.configuration") == null) {
+            copy(DEFAULT_LOG4J_CONFIG_FILE, tmpDir);
+            System.setProperty("log4j.configuration", "file:" + tmpDir + DEFAULT_LOG4J_CONFIG_FILE);
         }
     }
 
