@@ -255,5 +255,11 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
+    <repositories>
+        <repository>
+            <id>boxever-repo</id>
+            <url>https://nexus.boxever.com/nexus/content/repositories/boxever-repo/</url>
+        </repository>
+    </repositories>
 
 </project>
